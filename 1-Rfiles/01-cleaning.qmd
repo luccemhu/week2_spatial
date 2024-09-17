@@ -1,0 +1,54 @@
+---
+title: "cleanin_dp_tarea2"
+format: html
+editor: visual
+---
+
+```{r, warning=FALSE, message=FALSE}
+# Use pacman's function p_load to install and load the necessary libraries:
+# First, install the pacman package if it's not already installed
+#install.packages("pacman")
+
+pacman::p_load(
+  readr,
+  plyr,
+  writexl
+)
+```
+
+```{r}
+# Importar archivo CSV
+data <- read_csv("../2-datos/1-delitos-2018-23.csv")
+```
+
+```{r}
+# Convertimos de dbl a interger
+# Convertir las columnas ANIO, MES y CANTIDAD a enteros usando lapply
+data[c("ANIO", "MES", "CANTIDAD")] <- lapply(data[c("ANIO", "MES", "CANTIDAD")], as.integer)
+
+# Verificar los tipos de las columnas después de la conversión
+#str(data)
+```
+
+```{r}
+#unique(data$PROV_HECHO)
+```
+
+```{r}
+# Cargar las librerías necesarias
+library(dplyr)
+
+# Filtrar por TIPO y SUB_TIPO, agrupar por ANIO y PROV_HECHO, y sumar CANTIDAD
+result <- data %>%
+  filter(TIPO == "PATRIMONIO (DELITO)", SUB_TIPO %in% c("HURTO", "ROBO")) %>%
+  group_by(ANIO, PROV_HECHO) %>%
+  summarise(total_delitos = sum(CANTIDAD, na.rm = TRUE), .groups = 'drop')
+
+# Ver el resultado
+print(result)
+```
+
+```{r}
+# Guardar el dataframe como un archivo Excel
+write_xlsx(result, "../3-procesados/provincias_delitos.xlsx")
+```

@@ -1,0 +1,529 @@
+---
+title: "Property crimes across Peru"
+subtitle: "Analysis of property crimes, specifically focusing on thefts and burglaries, across the 195 provinces of Peru for the years 2018 to 2023"
+theme:
+  light: flatly
+  dark: darkly
+format:
+  html:
+    code-fold: true
+    code-summary: "Code"
+    code-link: true
+    toc: true
+    toc-location: left
+    toc-title: " "
+    number-sections: true
+    self-contained: true
+editor: source
+fig-cap-location: margin
+author: 
+  name: "Joel Belsasar Ccallocunto \n **[luccemhu](https://github.com/luccemhu)**"
+  affiliation: "Pontifical Catholic University of Peru"
+  email: joel.hucall@gmail.com
+keywords: "Citizen Security, Urban crime, Victimization"
+date: today
+description: "This document provides a descriptive analysis of the citizen security module 600 for the years 2022 and 2023, including victimization rates, perception of insecurity, and home burglaries by department."
+title-block-banner: "#f0f3f5"
+title-block-banner-color: "black"
+css: style.css
+bibliography: references.bib
+csl: https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+::: {.callout-caution collapse="true"}
+## Considerations for this Document
+
+This Quarto document serves as a practical illustration of the concepts analyzed in data analysis. It is designed primarily for educational purposes, focusing on demonstrating analytical techniques rather than scientific rigor.
+:::
+
+## Introduction
+
+Today more than ever, Latin America is the most violent region in the world, with the highest crime and homicide rates—a situation that was already critical even before the arrival of COVID-19 [@hernandez2019; @hernandez2020; @dammert2022]. Across the region, crime and its consequences affect an increasing number of people and have become a recurrent topic in political debates. However, despite the fact that no other country in the region reports as high a perception of insecurity as Peru [@kanashiro2018], the country is not particularly violent. Between 2022 and 2023, the homicide rate was 7.8 per 100,000 inhabitants [@inei2024], placing the country in the more "peaceful" quartile of the region. However, there are signs that urban violence is increasing due to new criminal modalities, such as contract killings and extortions, among others.
+
+This report provides a detailed analysis of property crimes, specifically focusing on thefts and burglaries, across the 195 provinces of Peru for the years 2018 to 2023. The analysis uses data from the National Observatory of Citizen Security, which can be accessed [here](https://observatorio.mininter.gob.pe/proyectos/base-de-datos-hechos-delictivos-basados-en-denuncias-en-el-sidpol).
+
+The report employs quintile-based classification to categorize risk levels into five distinct categories. The provincial boundaries used in this analysis are from 2023 and were sourced from the National Institute of Statistics and Informatics (INEI), which can be found [here](https://www.geogpsperu.com/2014/03/base-de-datos-peru-shapefile-shp-minam.html) by [GEO GPS PERÚ](https://www.geogpsperu.com/). The data on property crimes is sourced from the [National Observatory of Citizen Security](https://observatorio.mininter.gob.pe/), part of the Ministry of the Interior.
+
+This analysis aims to offer a comprehensive view of the distribution and risk levels of property crimes across Peruvian provinces, providing insights into spatial patterns and trends over the past five years.
+
+For further information about the datasets and methodologies used, you can refer to the official sources linked above.
+
+Let's load the necessary libraries before starting!!
+
+```{r, warning=FALSE, message=FALSE}
+# Use pacman's function p_load to install and load the necessary libraries:
+# First, install the pacman package if it's not already installed
+# install.packages("pacman")
+
+pacman::p_load(
+  dplyr, # Data manipulation
+  classInt, # Classification intervals
+  ggplot2, # Data visualization
+  purrr, # Functional programming
+  readxl, # Reading Excel files
+  tidyverse, # Collection of R packages for data science
+  sf, # Simple features for spatial data
+  haven, # Read and write data from other statistical software
+  rio, # Easy import and export of data
+  janitor, # Cleaning data
+  sjmisc, # Miscellaneous utilities for data analysis
+  glue, # String interpolation
+  sjlabelled, # Handling labelled data
+  Hmisc, # Miscellaneous functions for data analysis
+  stringdist, # String distance calculations
+  reactable, # for interactive tables
+  plotly,
+  RColorBrewer
+)
+```
+
+## Loading Data
+
+```{r}
+# Load the dataset with provincial crime data from an Excel file
+delitos <- read_excel("../3-procesados/provincias_delitos.xlsx")
+# names(delitos)
+```
+
+```{r}
+# Load the provincial boundaries shapefile for Peru from the specified path
+peru_prov <- st_read(
+  glue(
+    "C:/Users/user/Desktop/week2_spatial/data/shp-provincias/Provincial INEI 2023 geogpsperu SuyoPomalia.shp"
+  ),
+  # funcion para importar desde tu carpeta (directorio) y con extension .shp
+  quiet = TRUE # Suppress messages during import
+)
+# names(peru_prov)
+# str(peru_prov)
+```
+
+# Fuzzy merge
+
+```{r}
+# Extract the province names from the crime data and the shapefile
+provincias_delitos <- delitos$PROV_HECHO
+provincias_peru_prov1 <- peru_prov$PROVINCIA
+```
+
+```{r}
+# Function to find the best match for a province name using string distance
+
+find_matches <- function(provincia, provincias_list) {
+  distances <- stringdist::stringdist(provincia, provincias_list, method = "jw")
+  min_distance <- min(distances)
+  best_match <- provincias_list[which.min(distances)]
+  return(data.frame(
+    provincia_delitos = provincia, mejor_coincidencia =
+      best_match, distancia = min_distance
+  ))
+}
+```
+
+```{r}
+# Apply the matching function to all provinces in the crime data
+
+matches <- do.call(rbind, lapply(provincias_delitos, find_matches,
+  provincias_list = provincias_peru_prov1
+))
+# matches # Verificamos
+```
+
+```{r}
+# Identify provinces in the crime data that did not have a close match
+threshold <- 0.1 # Set the threshold for distance to consider a match
+new_provincias <- matches[matches$distancia > threshold, ]
+new_provincias
+```
+
+```{r}
+# Find provinces in the shapefile that are not present in the crime data
+not_in_delitos <- setdiff(provincias_peru_prov1, provincias_delitos)
+not_in_delitos
+```
+
+```{r}
+# Rename "NASCA" to "NAZCA" and remove "PUTUMAYO" from the shapefile data
+peru_prov1 <- peru_prov |>
+  mutate(PROVINCIA = recode(PROVINCIA, "NASCA" = "NAZCA")) |>
+  filter(PROVINCIA != "PUTUMAYO") |>
+  select(PROVINCIA, geometry)
+```
+
+
+### Merging
+
+```{r}
+# Merge the crime data with the shapefile data
+geo_delitos <- merge(delitos, peru_prov1, 
+                     by.x = "PROV_HECHO", 
+                     by.y = "PROVINCIA", 
+                     all = TRUE)
+# geo_delitos # Verificamos
+```
+
+![Insecurity in Peru. Source: Infobae](../5-images/victimas.png){width=600}
+
+The image above provides an overview of insecurity in Peru. For a detailed review of the dataset, you can consult the interactive version using the `DT` package:
+
+```{r}
+# Descriptive statistics by department
+#reactable(geo_delitos, pagination = TRUE, filterable = TRUE, defaultPageSize = 5)
+```
+
+## Quitamos a la provincia de Lima de la data
+
+Hay un tercio de la población peruana en Lima. Se debe realizar un analisis en particular a nivel distrital.
+
+| Ciudad | Año  | Total Delitos | 
+|--------|------|---------------|
+| LIMA   | 2021 | 79,882        | 
+| LIMA   | 2020 | 63,026        | 
+| LIMA   | 2022 | 101,869       | 
+| LIMA   | 2023 | 167,110       | 
+| LIMA   | 2019 | 113,891       |
+| LIMA   | 2018 | 123,150       |
+
+```{r}
+# Filter out the data for Lima province
+geo_delitos <- geo_delitos[geo_delitos$PROV_HECHO != "LIMA", ]
+```
+
+## Choropleths
+
+We should plan how to color the polygons based on some variable:
+
+```{r}
+# Mostrar estadísticas descriptivas de la columna 'Total_mnmx'
+summary(geo_delitos$total_delitos)
+describe(geo_delitos$total_delitos)
+```
+
+```{r}
+boxplot(geo_delitos$total_delitos)
+```
+
+
+```{r}
+hist(geo_delitos$total_delitos)
+```
+
+
+# Clasificación y Cálculo de Métricas
+
+```{r}
+# Número de intervalos deseados
+K <- 5
+
+# Variable que queremos clasificar
+theVar <- geo_delitos$total_delitos
+
+# Clasificaciones utilizando diferentes métodos
+ei5 <- classIntervals(theVar, n = K, style = "equal")
+q5 <- classIntervals(theVar, n = K, style = "quantile")
+fj5 <- classIntervals(theVar, n = K, style = "fisher")
+jc5 <- classIntervals(theVar, n = K, style = "jenks")
+
+# Método personalizado para puntos de ruptura máximos (aproximado)
+find_max_breaks <- function(x, k) {
+  breaks <- quantile(x, probs = seq(0, 1, length.out = k + 1), na.rm = TRUE)
+  return(classIntervals(x, n = k, style = "fixed", fixedBreaks = breaks))
+}
+mb5 <- find_max_breaks(theVar, K)
+
+# Método personalizado para HeadTailBreaks (requiere implementación)
+# Aquí se usa un enfoque simplificado
+head_tail_breaks <- function(x) {
+  breaks <- quantile(x, probs = c(0, 0.1, 0.5, 0.9, 1), na.rm = TRUE)
+  return(classIntervals(x, n = length(breaks) - 1, style = "fixed", 
+                        fixedBreaks = breaks))
+}
+ht <- head_tail_breaks(theVar)
+
+# Clasificación en un solo dataframe
+classifiers <- list(ei5, q5, fj5, jc5, mb5, ht)
+names(classifiers) <- c("EqualInterval", "Quantiles", "FisherJenks", 
+                        "JenksCaspall", "MaxBreaks", "HeadTailBreaks")
+
+# Extraer ADCM (Average Distance to Class Mean) - Usando medidas personalizadas
+calculate_adcm <- function(class_intervals, data) {
+  breaks <- class_intervals$brks
+  classes <- cut(data, breaks = breaks, include.lowest = TRUE)
+  means <- tapply(data, classes, mean, na.rm = TRUE)
+  distances <- sapply(levels(classes), function(level) {
+    mean(abs(data[classes == level] - means[level]), na.rm = TRUE)
+  })
+  mean(distances)
+}
+
+# Calcular ADCM para cada clasificador
+adcm_values <- sapply(classifiers, calculate_adcm, data = theVar)
+
+# Crear DataFrame con los resultados
+adcm_df <- data.frame(
+  ADCM = adcm_values,
+  Classifier = names(adcm_values)
+)
+
+# adcm_df
+```
+
+
+```{r, include=F}
+# Crear DataFrame con los resultados (deberías tener `adcm_df` del paso anterior)
+# Por ejemplo, si `adcm_df` ya está creado con los valores de ADCM
+
+# Ordenar el DataFrame por los valores de ADCM
+adcm_df_sorted <- adcm_df |>
+  arrange(ADCM)
+
+# Crear gráfico de barras horizontales usando ggplot2
+ggplot(adcm_df_sorted, aes(x = reorder(Classifier, ADCM), y = ADCM)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Valores ADCM por Clasificador",
+       x = "Clasificador",
+       y = "ADCM") +
+  theme_minimal()
+```
+
+# Guardamos las 2 mejores estrategias de clasificación al dataframe
+
+```{r}
+# Función para asignar clasificaciones
+assign_classifications <- function(values, breaks) {
+  classified <- cut(values, breaks = breaks, include.lowest = TRUE, 
+                    labels = FALSE)
+  return(classified)
+}
+
+# Añadir las nuevas columnas al DataFrame
+# geo_delitos$Total_ei5 <- assign_classifications(geo_delitos$total_delitos,
+#                                                 ei5$brks) # Con Lima
+geo_delitos$Total_q5 <- assign_classifications(
+  geo_delitos$total_delitos,
+  q5$brks
+)
+geo_delitos$Total_mb5 <- assign_classifications(
+  geo_delitos$total_delitos,
+  mb5$brks
+)
+
+# Verifica si hay NA en las nuevas columnas y el rango de los intervalos
+# summary(geo_delitos$Total_ei5) # Con Lima
+summary(geo_delitos$Total_q5)
+summary(geo_delitos$Total_mb5)
+```
+
+
+```{r}
+#| layout-ncol: 2 # Specifies the number of columns for displaying your plots, etc.
+
+library(dplyr)
+
+# Lista de columnas de clasificación
+indexList <- c("Total_q5", "Total_mb5")
+
+# Función para calcular la media de 'total_delitos' por grupo
+aggregator <- function(data, group_col) {
+  data |>
+    group_by(across(all_of(group_col))) |>
+    summarise(mean_delitosp = mean(total_delitos, 
+                                   na.rm = TRUE), .groups = "drop")
+}
+
+# Realizar la agregación y combinación de resultados
+results_q5 <- aggregator(geo_delitos, "Total_q5")
+results_mb5 <- aggregator(geo_delitos, "Total_mb5")
+
+# Mostrar los resultados
+results_q5
+results_mb5
+```
+
+
+```{r}
+# Definir los nombres de columnas originales
+indexList <- c("Total_q5", "Total_mb5")
+
+# Crear nuevos nombres de columna agregando "_cat"
+newColNames <- paste0(indexList, "_cat")
+
+# Crear nuevas columnas en `geo_delitos` copiando los valores de las columnas originales
+geo_delitos[newColNames] <- geo_delitos[indexList]
+
+# Definir las nuevas etiquetas para los niveles de clasificación
+newLabelsForLevels <- c("1_LowRisk", "2_MediumLowRisk", "3_MediumRisk", 
+                        "4_MediumHighRisk", "5_HighRisk")
+
+# Reemplazar los valores en las columnas categóricas con las nuevas etiquetas
+geo_delitos <- geo_delitos %>%
+  mutate(across(all_of(newColNames), ~ factor(., levels = 1:5, 
+                                              labels = newLabelsForLevels)))
+
+# Eliminar la columna 'Country' si existe en el DataFrame
+if ("Country" %in% names(geo_delitos)) {
+  geo_delitos <- geo_delitos %>%
+    select(-Country)
+}
+
+# Mostrar las primeras filas del DataFrame actualizado
+# geo_delitos
+```
+
+## Utilizaremos el método de los cuantiles
+
+```{r  cache=FALSE, results=FALSE,message=FALSE,warning=FALSE}
+# Definir la paleta de colores "PuRd" con el número de colores igual al número de categorías únicas en Total_q5_cat
+num_classes <- length(unique(geo_delitos$Total_q5_cat))
+custom_palette_all <- brewer.pal(n = num_classes, name = "PuRd")
+
+# Crear mapa con todas las categorías
+map_all_classifiers <- ggplot(geo_delitos) +
+  geom_sf(aes(fill = factor(Total_q5_cat), geometry = geometry), lwd = 0.05, 
+          color = "white") +
+  scale_fill_manual(values = custom_palette_all) + # Usar la paleta para todas las categorías
+  labs(
+    title = "Mapa de delitos patrimoniales por categoría en el Perú 2018-2023",
+    subtitle = "Distribución de delitos según las categorías de riesgo según el método de Quantiles",
+    caption = "Fuente: SIDPOL-PNP.Observatorio Nacional de Seguridad Ciudadana"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 20, hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+#map_all_classifiers
+```
+```{r, include =FALSE,message=FALSE,warning=FALSE}
+# Especificar el nombre del archivo, formato, resolución, y tamaño
+ggsave(
+  filename = "../5-images/map_all_classifiers.png", # Nombre del archivo (puede ser .png, .jpeg, .pdf, etc.)
+  plot = map_all_classifiers,                    # Gráfico que se va a guardar
+  width = 10,                                    # Ancho en pulgadas
+  height = 8,                                    # Alto en pulgadas
+  dpi = 300,                                     # Resolución (DPI - dots per inch)
+  units = "in"                                   # Unidades de tamaño (pulgadas en este caso)
+)
+
+```
+
+
+![Clasificación del riesgo de delitos patrimoniales entre 2018-2023](../5-images/map_all_classifiers.png){width=100%}
+
+
+
+# Mapa de Riesgo Alto (`5_highrisk`) 
+Aquí se filtran los datos para mostrar solo las áreas con riesgo alto
+
+```{r  cache=FALSE, results=FALSE,message=FALSE,warning=FALSE}
+# Crear paleta personalizada para riesgo alto
+palette_highrisk <- c("#FF6347") # Rojo tomate para riesgo alto
+palette_other <- c("#E0E0E0") # Gris claro para otras provincias
+
+# Crear mapa coroplético para riesgo alto
+map_highrisk <- ggplot() +
+  # Provincias en gris
+  geom_sf(data = geo_delitos %>% filter(Total_q5_cat != "5_HighRisk"),
+          aes(geometry = geometry), fill = palette_other,
+          color = "black", lwd = 0.05) +
+  # Provincias de riesgo alto en rojo tomate
+  geom_sf(data = geo_delitos %>% filter(Total_q5_cat == "5_HighRisk"),
+          aes(fill = factor(Total_q5_cat), geometry = geometry),
+          color = "black", lwd = 0.05) +
+  scale_fill_manual(values = palette_highrisk, name = "Clasificación por Quantiles",
+                    breaks = c("5_HighRisk"), labels = c("Riesgo Alto")) +
+  labs(
+    title = "Mapa de Riesgo Alto en el Perú 2018-2023",
+    subtitle = "Distribución de delitos patrimoniales de riesgo alto según el método de Quantiles",
+    caption = "Fuente: SIDPOL PNP. Observatorio de Seguridad Ciudadana"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 20, hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "right", # Posicionar la leyenda en la parte inferior
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14)
+  )
+#map_highrisk
+```
+
+```{r, include =FALSE,message=FALSE,warning=FALSE}
+# Especificar el nombre del archivo, formato, resolución, y tamaño
+ggsave(
+  filename = "../5-images/map_highrisk.png", # Nombre del archivo (puede ser .png, .jpeg, .pdf, etc.)
+  plot = map_highrisk,                    # Gráfico que se va a guardar
+  width = 10,                                    # Ancho en pulgadas
+  height = 8,                                    # Alto en pulgadas
+  dpi = 300,                                     # Resolución (DPI - dots per inch)
+  units = "in"                                   # Unidades de tamaño (pulgadas en este caso)
+)
+
+```
+
+![Riesgo alto en delitos patrimoniales entre 2018-2023](../5-images/map_highrisk.png){width=100%}
+
+# Mapa para Riesgo Bajo (`1_lowrisk`)
+
+Aquí se filtran los datos para mostrar solo las áreas con riesgo bajo
+
+```{r  cache=FALSE, results = FALSE,message=FALSE,warning=FALSE}
+# Crear paleta personalizada para riesgo bajo, alto y otras provincias
+palette_lowrisk <- c("#64B5F6") # Azul claro para riesgo bajo
+palette_other <- c("#E0E0E0") # Gris neutro para otras provincias
+
+# Crear mapa coroplético para riesgo bajo
+map_lowrisk <- ggplot() +
+  # Provincias en gris neutro
+  geom_sf(data = geo_delitos %>% filter(Total_q5_cat != "1_LowRisk"),
+          aes(geometry = geometry), fill = palette_other,
+          color = "black", lwd = 0.1) +
+  # Provincias de riesgo bajo en azul claro
+  geom_sf(data = geo_delitos %>% filter(Total_q5_cat == "1_LowRisk"),
+          aes(fill = factor(Total_q5_cat), geometry = geometry),
+          color = "black", lwd = 0.1) +
+  scale_fill_manual(values = palette_lowrisk, name = "Clasificación por Quantiles",
+                    breaks = c("1_LowRisk"), labels = c("Riesgo Bajo")) +
+  labs(
+    title = "Mapa de Riesgo Bajo en el Perú 2018-2023",
+    subtitle = "Distribución de delitos patrimoniales de riesgo bajo según el método de Quantiles",
+    caption = "Fuente: SIDPOL-PNP. Observatorio Nacional de Seguridad Ciudadana"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 20, hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "right", # Posicionar la leyenda en la parte inferior
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14)
+  )
+
+#map_lowrisk
+```
+
+```{r, include =FALSE,message=FALSE,warning=FALSE}
+# Especificar el nombre del archivo, formato, resolución, y tamaño
+ggsave(
+  filename = "../5-images/map_lowrisk.png", # Nombre del archivo (puede ser .png, .jpeg, .pdf, etc.)
+  plot = map_lowrisk,                    # Gráfico que se va a guardar
+  width = 10,                                    # Ancho en pulgadas
+  height = 8,                                    # Alto en pulgadas
+  dpi = 300,                                     # Resolución (DPI - dots per inch)
+  units = "in"                                   # Unidades de tamaño (pulgadas en este caso)
+)
+```
+
+![Riesgo bajo en delitos patrimoniales en el Perú entre 2018-2023](../5-images/map_lowrisk.png){width=100%}
+
+
+
+
+
+
+
+
