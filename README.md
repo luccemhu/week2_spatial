@@ -1,60 +1,26 @@
-# 2-TAREA-1INT46-PUCP
+# [2-TAREA-1INT46-PUCP](https://luccemhu.github.io/week2_spatial/)
 
 ## Diccionario de Datos
 
-Enlace a GitHub Pages: https://luccemhu.github.io/1-TAREA-1INT46-PUCP/
+Enlace a GitHub Pages: https://luccemhu.github.io/week2_spatial/
 
-Este documento proporciona una descripción de las variables en el conjunto de datos utilizado para el análisis. Cada variable se detalla a continuación.
+Este documento proporciona una descripción de las variables en el conjunto de datos utilizado para el análisis.
 
-## Variables
-
-### Localidad
-- **Descripción**: Nombre del lugar o área geográfica.
-- **Tipo de Datos**: Texto (String)
-- **Ejemplo**: `ABANCAY`
-
-### Año
-- **Descripción**: Año en el que se recopilaron los datos.
-- **Tipo de Datos**: Numérico (Integer)
-- **Ejemplo**: `2018`
-
-### Número de Delitos
-- **Descripción**: Cantidad total de delitos registrados en el área durante el año especificado.
-- **Tipo de Datos**: Numérico (Integer)
-- **Ejemplo**: `848`
-
-### Geometría
-- **Descripción**: Representación geométrica del área geográfica en formato MULTIPOLYGON. Utilizado para la visualización espacial.
-- **Tipo de Datos**: Texto (String) en formato WKT (Well-Known Text)
-- **Ejemplo**: `MULTIPOLYGON (((-72.91562 -...`
-
-### Categoría de Riesgo
-- **Descripción**: Clasificación del riesgo basado en el análisis de los datos de delitos.
-- **Tipo de Datos**: Texto (String)
-- **Posibles Valores**: 
-  - `1_LowRisk`
-  - `2_ModerateRisk`
-  - `3_HighRisk`
-  - `4_VeryHighRisk`
-  - `5_HighRisk`
-- **Ejemplo**: `5_HighRisk`
-
-### Categoría de Riesgo (Categoría)
-- **Descripción**: Categoría de riesgo detallada asociada al área geográfica.
-- **Tipo de Datos**: Texto (String)
-- **Posibles Valores**: 
-  - `1_LowRisk`
-  - `2_ModerateRisk`
-  - `3_HighRisk`
-  - `4_VeryHighRisk`
-  - `5_HighRisk`
-- **Ejemplo**: `5_HighRisk`
+| **Variable**              | **Descripción**                                                             | **Tipo de Datos**          | **Ejemplo**              | **Valores**                                                  |
+|---------------------------|-----------------------------------------------------------------------------|----------------------------|--------------------------|--------------------------------------------------------------|
+| `PROV_HECHO`               | Nombre del lugar o área geográfica.                                          | Texto (String)             | `ABANCAY`                | Nombres de localidades                                       |
+| `ANIO`                     | Año en el que se recopilaron los datos.                                      | Numérico (Integer)         | `2018`                   | Años (por ejemplo, 2018, 2019)                               |
+| `total_delitos`        | Cantidad total de delitos registrados en el área durante el año especificado.| Numérico (Integer)         | `848`                    | Valores numéricos                                             |
+| `geometry`               | Representación geométrica del área geográfica en formato MULTIPOLYGON.       | Texto (String, WKT)        | `MULTIPOLYGON (((-72.91562 ...` | Formato WKT (Well-Known Text)                          |
+| `total_q5`      | Clasificación del riesgo basado en el análisis de delitos.                   | Texto (String)             | `5_HighRisk`             | `1_LowRisk`, `2_ModerateRisk`, `3_HighRisk`, `4_VeryHighRisk`, `5_HighRisk` |
+| `total_q5_cat`| Clasificación detallada del riesgo para validación.                          | Texto (String)             | `5_HighRisk`             | `1_LowRisk`, `2_ModerateRisk`, `3_HighRisk`, `4_VeryHighRisk`, `5_HighRisk` |
 
 ## Ejemplo de Fila de Datos
 
-| Localidad | Año  | Número de Delitos | Geometría       | Categoría de Riesgo | Categoría de Riesgo (Categoría) |
-|-----------|------|-------------------|-----------------|---------------------|--------------------------------|
-| ABANCAY   | 2018 | 848               | MULTIPOLYGON (((-72.91562 -... | 5_HighRisk          | 5_HighRisk                      |
+| PROV_HECHO | ANIO  | total_delitos | geometry       | total_q5 | total_q5_cat |
+|-----------|------|-------------------|-----------------|---------------------|--------------------------|
+| ABANCAY   | 2018 | 848               | MULTIPOLYGON (((-72.91562 -... | 5_HighRisk          | 5_HighRisk               |
+
 
 ## Descripción Adicional
 
@@ -62,5 +28,5 @@ Este documento proporciona una descripción de las variables en el conjunto de d
 - **Año**: Indica el año en que los datos fueron recopilados.
 - **Número de Delitos**: Representa la cantidad total de delitos reportados.
 - **Geometría**: Se utiliza para mapear el área geográfica en herramientas de visualización geoespacial.
-- **Categoría de Riesgo**: Clasificación del riesgo basado en la intensidad de los delitos.
+- **Categoría de Riesgo**: Clasificación del riesgo basado en la intensidad de los delitos por el método cuantiles.
 - **Categoría de Riesgo (Categoría)**: Repetición de la categoría de riesgo para validar consistencia.
